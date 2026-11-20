@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { gltfLoader } from "./gltf";
 
 /**
  * How GLB models are fitted. The bundled Sketchfab cars already face +Z at real scale.
@@ -49,7 +49,7 @@ const templates = new Map<string, Promise<THREE.Object3D | null>>();
 function loadTemplate(url: string): Promise<THREE.Object3D | null> {
   let p = templates.get(url);
   if (!p) {
-    p = new GLTFLoader()
+    p = gltfLoader()
       .loadAsync(url)
       .then((g) => g.scene)
       .catch((e) => {

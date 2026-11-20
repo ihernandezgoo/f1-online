@@ -31,8 +31,9 @@ export function Hud({ hud, info, trackName, onMenu }: { hud: HudState; info: Tra
 
   return (
     <div className="pointer-events-none absolute inset-0 select-none font-sans text-white">
-      {/* ---------- top-left: session / lap / target */}
+      {/* ---------- top-left: fps + session / lap / target */}
       <div className="absolute left-3 top-3 w-[300px]">
+        <FpsCounter perf={hud.perf} />
         <div className="mb-1 text-[11px] font-bold uppercase tracking-[0.2em] text-white/80 drop-shadow">{trackName}</div>
         <div className={`flex items-stretch ${box}`}>
           <div className="flex items-baseline gap-1 border-r border-white/15 px-3 py-1">
@@ -168,6 +169,22 @@ export function Hud({ hud, info, trackName, onMenu }: { hud: HudState; info: Tra
           🖱 Apunta para girar · Clic izq. acelera · Clic der. frena · Rueda: zoom · C cámara · R volver a pista
         </div>
       )}
+    </div>
+  );
+}
+
+function FpsCounter({ perf }: { perf: HudState["perf"] }) {
+  const color = perf.fps >= 55 ? "#22c55e" : perf.fps >= 30 ? "#eab308" : "#e10600";
+  const tris = perf.tris >= 1e6 ? `${(perf.tris / 1e6).toFixed(1)}M` : `${Math.round(perf.tris / 1e3)}k`;
+  return (
+    <div className="mb-1 inline-flex items-baseline gap-2 bg-black/70 px-2 py-0.5 font-mono text-[11px] tabular-nums">
+      <span className="text-base font-bold" style={{ color }}>
+        {perf.fps}
+      </span>
+      <span className="text-white/60">FPS</span>
+      <span className="text-white/40">
+        peor {perf.ms}ms · {perf.calls} dc · {tris} tri · x{perf.pixelRatio.toFixed(2)}
+      </span>
     </div>
   );
 }

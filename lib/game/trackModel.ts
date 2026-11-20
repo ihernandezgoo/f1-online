@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { gltfLoader } from "./gltf";
 import type { Track } from "./track";
 
 /**
@@ -30,7 +30,7 @@ export async function loadTrackModel(
   track: Track,
   onProgress?: (loadedBytes: number, totalBytes: number) => void,
 ): Promise<LoadedTrackModel> {
-  const gltf = await new GLTFLoader().loadAsync(def.url, (e) => {
+  const gltf = await gltfLoader().loadAsync(def.url, (e) => {
     onProgress?.(e.loaded, e.total);
   });
   const model = gltf.scene;
@@ -47,14 +47,27 @@ export async function loadTrackModel(
 
   // ---- render settings: big static scene, only receives shadows
   const asphalt: THREE.Mesh[] = [];
+  const cheap = new Map<THREE.Material, THREE.Material>();
   model.traverse((o) => {
+    // static: never recompute these matrices per frame
+    o.matrixAutoUpdate = false;
     const m = o as THREE.Mesh;
     if (!m.isMesh) return;
     m.castShadow = false;
     m.receiveShadow = true;
     const mats = Array.isArray(m.material) ? m.material : [m.material];
     if (mats.some((mat) => ASPHALT.test(mat.name))) asphalt.push(m);
+    const next = mats.map((mat) => {
+      let c = cheap.get(mat);
+      if (!c) {
+        c = toStandard(mat);
+        cheap.set(mat, c);
+      }
+      return c;
+    });
+    m.material = Array.isArray(m.material) ? next : next[0];
   });
+  model.updateMatrixWorld(true);
 
   // ---- height profile along the centerline from the asphalt vertices
   const cell = 4;
@@ -106,6 +119,37 @@ export async function loadTrackModel(
       });
     },
   };
+}
+
+/** KHR_materials_specular makes GLTFLoader create MeshPhysicalMaterial, whose shader is much
+ *  heavier. For scenery seen from the air a standard PBR material looks the same. */
+function toStandard(mat: THREE.Material): THREE.Material {
+  const p = mat as THREE.MeshPhysicalMaterial;
+  if (!p.isMeshPhysicalMaterial) return mat;
+  const s = new THREE.MeshStandardMaterial({
+    name: p.name,
+    color: p.color,
+    map: p.map,
+    normalMap: p.normalMap,
+    normalScale: p.normalScale,
+    roughness: p.roughness,
+    roughnessMap: p.roughnessMap,
+    metalness: p.metalness,
+    metalnessMap: p.metalnessMap,
+    aoMap: p.aoMap,
+    emissive: p.emissive,
+    emissiveMap: p.emissiveMap,
+    emissiveIntensity: p.emissiveIntensity,
+    alphaMap: p.alphaMap,
+    transparent: p.transparent,
+    opacity: p.opacity,
+    alphaTest: p.alphaTest,
+    side: p.side,
+    vertexColors: p.vertexColors,
+    depthWrite: p.depthWrite,
+  });
+  p.dispose();
+  return s;
 }
 
 function fillAndSmooth(raw: Float64Array): Float64Array {

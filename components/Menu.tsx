@@ -160,46 +160,57 @@ function Home({ go }: { go: (s: Screen) => void }) {
   );
 }
 
-function Garage({ carId, setCarId, done }: { carId: string; setCarId: (id: string) => void; done: () => void }) {
+function Garage({ carId, setCarId, done, back }: { carId: string; setCarId: (id: string) => void; done: () => void; back: () => void }) {
   const car = carById(carId);
+  const i = CARS.findIndex((c) => c.id === carId);
+  const step = (d: number) => setCarId(CARS[(i + d + CARS.length) % CARS.length].id);
   return (
-    <div className="grid flex-1 grid-cols-1 gap-0 lg:grid-cols-[280px_1fr]">
-      <div className="flex flex-col gap-2 border-r border-white/10 bg-black/30 p-4">
-        <div className="mb-2 text-xs font-bold uppercase tracking-[0.3em] text-white/50">Garaje · Monoplazas</div>
-        {CARS.map((c) => {
-          const active = c.id === carId;
-          return (
-            <button
-              key={c.id}
-              onClick={() => setCarId(c.id)}
-              className={`flex items-center gap-3 rounded border px-3 py-2 text-left transition ${
-                active ? "border-[#22c55e] bg-[#22c55e]/10" : "border-white/10 bg-white/[0.03] hover:border-white/30"
-              }`}
-            >
-              <span className="h-8 w-12 -skew-x-12 rounded-sm" style={{ background: c.color, boxShadow: `inset -8px 0 0 ${c.accent}` }} />
-              <span>
-                <span className="block text-[11px] uppercase tracking-widest text-white/50">{c.team}</span>
-                <span className="block text-lg font-extrabold italic leading-tight">{c.name}</span>
-              </span>
-            </button>
-          );
-        })}
-      </div>
-      <div className="relative flex min-h-[420px] flex-col">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(40,120,255,0.25),transparent_65%)]" />
-        <div className="relative flex-1">
-          <CarPreview car={car} />
-        </div>
-        <div className="relative flex items-center justify-between gap-4 border-t border-white/10 bg-black/40 px-6 py-4">
+    <div className="absolute inset-0 flex flex-col overflow-hidden bg-[#3a0303]">
+      {/* red studio backdrop */}
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_40%_45%,#e3241b_0%,#a50d0d_30%,#4a0404_65%,#1a0101_100%)]" />
+      <div className="pointer-events-none absolute inset-0 opacity-50 [background:repeating-linear-gradient(105deg,transparent_0_90px,rgba(255,255,255,0.05)_90px_93px)]" />
+      <div className="pointer-events-none absolute bottom-[18%] left-0 right-0 h-px bg-gradient-to-r from-transparent via-white/40 to-transparent" />
+
+      {/* team header */}
+      <div className="pointer-events-none relative z-10 px-8 pt-6">
+        <div className="text-xs font-bold uppercase tracking-[0.4em] text-white/70">Garaje</div>
+        <div className="mt-1 flex items-end gap-3">
+          <span className="h-14 w-2 -skew-x-12" style={{ background: car.accent }} />
           <div>
-            <div className="text-xs uppercase tracking-[0.3em] text-white/50">{car.team}</div>
-            <div className="text-3xl font-black italic">{car.name}</div>
-            {car.credit && <div className="mt-1 text-[11px] text-white/35">Modelo: {car.credit}</div>}
+            <div className="text-5xl font-black uppercase italic leading-none tracking-tight drop-shadow-[0_4px_12px_rgba(0,0,0,0.5)] md:text-6xl">{car.team}</div>
+            <div className="text-xl font-black italic text-white/80">{car.name}</div>
           </div>
-          <button onClick={done} className="-skew-x-12 bg-[#22a243] px-8 py-3 font-black uppercase italic tracking-wider transition hover:bg-[#2bc451]">
-            <span className="inline-block skew-x-12">Usar este coche ✓</span>
+        </div>
+      </div>
+
+      {/* the car */}
+      <div className="relative flex-1">
+        <CarPreview car={car} hero />
+      </div>
+
+      {/* bottom bar */}
+      <div className="relative z-10 flex h-20 items-center gap-4 border-t border-white/15 bg-gradient-to-b from-[#1b1f27] to-[#0b0d12] px-5">
+        <button onClick={back} title="Atrás" className="flex h-12 w-12 items-center justify-center rounded-full border-2 border-white/70 bg-[#e10600] text-2xl font-black transition hover:scale-105">
+          ‹
+        </button>
+        <div className="flex flex-1 items-center justify-center gap-3">
+          <button onClick={() => step(-1)} className="h-10 w-10 rounded bg-white/10 text-xl font-black transition hover:bg-white/25">
+            ‹
+          </button>
+          <div className="flex w-72 items-center justify-center gap-3 bg-black/50 py-2">
+            <span className="h-4 w-7 -skew-x-12" style={{ background: car.color, boxShadow: `inset -6px 0 0 ${car.accent}` }} />
+            <span className="text-lg font-black uppercase italic tracking-wide">{car.team}</span>
+            <span className="text-xs font-bold text-white/50">
+              {i + 1}/{CARS.length}
+            </span>
+          </div>
+          <button onClick={() => step(1)} className="h-10 w-10 rounded bg-white/10 text-xl font-black transition hover:bg-white/25">
+            ›
           </button>
         </div>
+        <button onClick={done} className="-skew-x-12 bg-[#e10600] px-7 py-3 font-black uppercase italic tracking-wider shadow-[0_0_24px_rgba(225,6,0,0.5)] transition hover:bg-[#ff1a12]">
+          <span className="inline-block skew-x-12">Elegir coche ✓</span>
+        </button>
       </div>
     </div>
   );
@@ -320,7 +331,7 @@ export function Menu({ initial, onStart }: { initial: SessionConfig; onStart: (c
       <TopBar car={car} onHome={() => setScreen("home")} screen={screen} />
       <div className="relative flex flex-1 flex-col">
         {screen === "home" && <Home go={setScreen} />}
-        {screen === "garage" && <Garage carId={carId} setCarId={setCarId} done={() => setScreen("lobby")} />}
+        {screen === "garage" && <Garage carId={carId} setCarId={setCarId} done={() => setScreen("lobby")} back={() => setScreen("home")} />}
         {screen === "lobby" && (
           <Lobby trackId={trackId} setTrackId={setTrackId} car={car} back={() => setScreen("home")} start={() => onStart({ trackId, carId })} />
         )}

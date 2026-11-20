@@ -44,6 +44,7 @@ export interface HudState {
   message: { text: string; tone: "purple" | "green" | "yellow" | "red" | "white" } | null;
   corner: CornerInfo | null; // next corner warning
   camYaw: number; // aerial camera orientation, for the minimap
+  perf: { fps: number; ms: number; calls: number; tris: number; pixelRatio: number };
 }
 
 export interface TrackInfo {
@@ -82,7 +83,7 @@ function writeRecord(id: string, t: number) {
 export class GameEngine {
   private renderer: THREE.WebGLRenderer;
   private scene = new THREE.Scene();
-  private camera = new THREE.PerspectiveCamera(50, 1, 0.3, 5000);
+  private camera = new THREE.PerspectiveCamera(50, 1, 0.5, 3500);
   private sun = new THREE.DirectionalLight(0xfff4e0, 2.4);
   private sky: THREE.Mesh;
   private envTex: THREE.Texture;
@@ -92,6 +93,15 @@ export class GameEngine {
   private lastFrame = 0;
   private acc = 0;
   private hudTimer = 0;
+  // perf counters
+  private fpsFrames = 0;
+  private fpsTime = 0;
+  private fpsWorst = 0;
+  private perf = { fps: 0, ms: 0, calls: 0, tris: 0, pixelRatio: 1 };
+  private maxPixelRatio = 1;
+  private lowFpsWindows = 0;
+  private qualityHoldUntil = 0;
+  private highFpsWindows = 0;
 
   private track: Track | null = null;
   private trackScene: TrackScene | null = null;
@@ -158,9 +168,11 @@ export class GameEngine {
     private cb: EngineCallbacks,
   ) {
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    // start at native resolution capped at 1.5x; adaptQuality() lowers/raises it to hold the FPS
+    this.maxPixelRatio = Math.min(window.devicePixelRatio, 1.5);
+    this.renderer.setPixelRatio(this.maxPixelRatio);
     this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.shadowMap.type = THREE.PCFShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.05;
     container.appendChild(this.renderer.domElement);
@@ -176,7 +188,7 @@ export class GameEngine {
     this.scene.fog = new THREE.Fog(0xb9d5ee, 350, 2200);
     this.scene.add(new THREE.HemisphereLight(0xcfe3ff, 0x40602c, 1.1));
     this.sun.castShadow = true;
-    this.sun.shadow.mapSize.set(2048, 2048);
+    this.sun.shadow.mapSize.set(1024, 1024);
     const sc = this.sun.shadow.camera;
     sc.left = -80;
     sc.right = 80;
@@ -288,6 +300,16 @@ export class GameEngine {
       // aerial camera orientation: per-circuit override, else the start straight runs
       // diagonally up-right on screen
       this.camYaw = meta?.cameraYaw ?? this.car.heading + 0.9;
+      // compile every shader and upload textures while the loading screen is still up,
+      // otherwise the first frames freeze for seconds
+      this.cb.onProgress?.("Preparando gráficos…");
+      this.resetSession();
+      this.updateVisuals(0);
+      this.updateCamera(0);
+      await this.renderer.compileAsync(this.scene, this.camera);
+      if (this.disposed) return;
+      this.renderer.render(this.scene, this.camera); // forces texture uploads
+      this.qualityHoldUntil = performance.now() + 3000;
       this.cb.onReady({ name: track.name, length: track.length, svg: trackSvgPath(track) });
       this.resetSession();
       this.lastFrame = performance.now();
@@ -580,7 +602,8 @@ export class GameEngine {
   private frame = (now: number) => {
     if (this.disposed) return;
     this.raf = requestAnimationFrame(this.frame);
-    const dt = Math.min(0.05, (now - this.lastFrame) / 1000);
+    const rawDt = (now - this.lastFrame) / 1000;
+    const dt = Math.min(0.05, rawDt);
     this.lastFrame = now;
     const t = this.track;
     const c = this.car;
@@ -604,6 +627,7 @@ export class GameEngine {
     this.updateVisuals(dt);
     this.updateCamera(dt);
     this.renderer.render(this.scene, this.camera);
+    this.measure(rawDt);
 
     this.hudTimer += dt;
     if (this.hudTimer > 0.05) {
@@ -611,6 +635,54 @@ export class GameEngine {
       this.emitHud();
     }
   };
+
+  private measure(dt: number) {
+    this.fpsFrames++;
+    this.fpsTime += dt;
+    this.fpsWorst = Math.max(this.fpsWorst, dt);
+    if (this.fpsTime >= 0.5) {
+      const info = this.renderer.info.render;
+      this.perf = {
+        fps: Math.round(this.fpsFrames / this.fpsTime),
+        ms: Math.round(this.fpsWorst * 1000 * 10) / 10, // worst frame in the window
+        calls: info.calls,
+        tris: info.triangles,
+        pixelRatio: this.renderer.getPixelRatio(),
+      };
+      this.fpsFrames = 0;
+      this.fpsTime = 0;
+      this.fpsWorst = 0;
+      this.adaptQuality();
+    }
+  }
+
+  /** Dynamic resolution: drop the pixel ratio when FPS stays low, recover when there is headroom. */
+  private adaptQuality() {
+    if (this.paused || this.phase === "loading" || performance.now() < this.qualityHoldUntil) return;
+    const fps = this.perf.fps;
+    const pr = this.renderer.getPixelRatio();
+    if (fps < 50) {
+      this.highFpsWindows = 0;
+      if (++this.lowFpsWindows >= 2 && pr > 0.6) {
+        this.setPixelRatio(Math.max(0.6, pr - 0.15));
+        this.lowFpsWindows = 0;
+      }
+    } else if (fps >= 58) {
+      this.lowFpsWindows = 0;
+      if (++this.highFpsWindows >= 8 && pr < this.maxPixelRatio) {
+        this.setPixelRatio(Math.min(this.maxPixelRatio, pr + 0.1));
+        this.highFpsWindows = 0;
+      }
+    } else {
+      this.lowFpsWindows = 0;
+      this.highFpsWindows = 0;
+    }
+  }
+
+  private setPixelRatio(pr: number) {
+    this.renderer.setPixelRatio(pr);
+    this.resize();
+  }
 
   private tickPhase() {
     if (this.phase !== "countdown") return;
@@ -800,6 +872,7 @@ export class GameEngine {
       paused: this.paused,
       message: this.message,
       camYaw: this.camYaw,
+      perf: this.perf,
       corner: this.phase === "running" && this.track ? nextCorner(this.track, this.corners, c.idx, c.speed) : null,
     });
   }

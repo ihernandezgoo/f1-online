@@ -457,7 +457,7 @@ export function buildTrackScene(t: Track, maxAniso: number, gridSlots: { s: numb
   for (const side of [1, -1]) {
     const geo = keep(wallRibbon(t, side, wallHeight));
     const wall = new THREE.Mesh(geo, wallMat);
-    wall.castShadow = true;
+    wall.castShadow = false;
     wall.receiveShadow = true;
     group.add(wall);
   }
@@ -476,12 +476,12 @@ export function buildTrackScene(t: Track, maxAniso: number, gridSlots: { s: numb
     for (const s of [1, -1]) {
       const pole = new THREE.Mesh(poleGeo, steel);
       pole.position.set(s * span, 3.5, 0);
-      pole.castShadow = true;
+      pole.castShadow = false;
       gantry.add(pole);
     }
     const beam = new THREE.Mesh(keep(new THREE.BoxGeometry(span * 2 + 0.4, 0.7, 0.5)), steel);
     beam.position.set(0, 6.6, 0);
-    beam.castShadow = true;
+    beam.castShadow = false;
     gantry.add(beam);
     const panel = new THREE.Mesh(keep(new THREE.BoxGeometry(4.6, 1.3, 0.4)), keep(new THREE.MeshStandardMaterial({ color: 0x0c0c0c })));
     panel.position.set(0, 5.7, -0.1);
@@ -523,13 +523,13 @@ export function buildTrackScene(t: Track, maxAniso: number, gridSlots: { s: numb
       for (let s = 0; s < 6; s++) {
         const step = new THREE.Mesh(stepGeo, standMat);
         step.position.set(0, 0.6 + s * 1.2, s * 2.2);
-        step.castShadow = true;
+        step.castShadow = false;
         step.receiveShadow = true;
         stand.add(step);
       }
       const roof = new THREE.Mesh(roofGeo, roofMat);
       roof.position.set(0, 10, 5.5);
-      roof.castShadow = true;
+      roof.castShadow = false;
       stand.add(roof);
       group.add(stand);
     }
@@ -551,7 +551,7 @@ export function buildTrackScene(t: Track, maxAniso: number, gridSlots: { s: numb
     const leafGeo = keep(new THREE.ConeGeometry(2.4, 7, 7));
     const trunks = new THREE.InstancedMesh(trunkGeo, keep(new THREE.MeshStandardMaterial({ color: 0x5b3a21 })), count);
     const leaves = new THREE.InstancedMesh(leafGeo, keep(new THREE.MeshStandardMaterial({ color: 0x2d5a27, roughness: 0.9 })), count);
-    leaves.castShadow = true;
+    leaves.castShadow = false;
     const m = new THREE.Matrix4();
     const q = new THREE.Quaternion();
     const s = new THREE.Vector3();
